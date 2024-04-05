@@ -433,6 +433,7 @@ Receive(m) ==
     IN \* Any RPC with a newer term causes the recipient to advance
        \* its term first. Responses with stale terms are ignored.
        /\ step' = step+1
+       /\ Discard(m)
        /\ UpdateTerm(i, j, m)
        /\ \/ /\ m.mtype = RequestVoteRequest
              /\ HandleRequestVoteRequest(i, j, m)
