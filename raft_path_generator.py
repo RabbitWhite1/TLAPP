@@ -1,10 +1,5 @@
 from lib import *
 
-def usage():
-    sys.stdout.write("path_generator.py originally by Dong WANG. Adapted by protosim developers for our use case.\n")
-    sys.stdout.write("    Generate all paths from a .dot file created by TLC checking output\n\n")
-    sys.stdout.write("USAGE: path_generator.py END_ACTION /path/to/file.dot /path/to/store/paths\n [POR]")
-
 class RaftEntry:
     term: int
     value: int
