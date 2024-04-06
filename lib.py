@@ -3,13 +3,20 @@ import copy
 import json
 import random
 import re
+import rich
 import sys
 import time
 import networkx as nx
 from networkx.classes.digraph import DiGraph
+from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, TimeElapsedColumn
 
 PATHS = [[]]
         
+
+def usage():
+    sys.stdout.write("path_generator.py originally by Dong WANG. Adapted by protosim developers for our use case.\n")
+    sys.stdout.write("    Generate all paths from a .dot file created by TLC checking output\n\n")
+    sys.stdout.write("USAGE: path_generator.py END_ACTION /path/to/file.dot /path/to/store/paths\n [POR]")
         
 ##################################### General functions #########################################
 
@@ -52,22 +59,25 @@ def output(graph, output, extractor):
         if node.isdigit() or node.startswith('-'):
             node_file.write(node + ' ' + label[node] + '\n')
     # Write all edge information
-    for path_id, path in enumerate(PATHS):
-        prev_node = None
-        diffs = []
-        for i, node in enumerate(path):
-            if i == 0:
-                edge_file.write(node + ' ')
-                prev_node = node
-            else:
-                action = graph[path[i-1]][node]['label']
-                edge_file.write(action + ' ' + node + ' ')
-                # write the diff of two nodes to message file
-                if prev_node != None:
-                    diffs.append(extractor.extract(action, label[prev_node], label[node]))
-                prev_node = node
-        edge_file.write('\n')
-        message_file.write(json.dumps(diffs, default=lambda o: o.__dict__) + '\n')
+    with (progress:=Progress(TextColumn("Path Writing"), BarColumn(), 
+                             TextColumn("[progress.percentage]{task.percentage:>3.0f}%"), 
+                             TimeRemainingColumn(), TimeElapsedColumn())):
+        for path_id, path in progress.track(enumerate(PATHS), total=len(PATHS)):
+            prev_node = None
+            diffs = []
+            for i, node in enumerate(path):
+                if i == 0:
+                    edge_file.write(node + ' ')
+                    prev_node = node
+                else:
+                    action = graph[path[i-1]][node]['label']
+                    edge_file.write(action + ' ' + node + ' ')
+                    # write the diff of two nodes to message file
+                    if prev_node != None:
+                        diffs.append(extractor.extract(action, label[prev_node], label[node]))
+                    prev_node = node
+            edge_file.write('\n')
+            message_file.write(json.dumps(diffs, default=lambda o: o.__dict__) + '\n')
 
 
 ##################################### Basic Mocket functions #########################################
