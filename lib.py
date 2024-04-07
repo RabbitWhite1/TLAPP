@@ -7,6 +7,7 @@ import rich
 import sys
 import time
 import networkx as nx
+from extractor import Extractor
 from networkx.classes.digraph import DiGraph
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, TimeElapsedColumn
 
@@ -215,27 +216,19 @@ def traverse(diGraph, preNode, curNode, endAction, pathID, POR):
     if first_succ != None:
         #print('Traverse at:', first_succ)
         traverse(diGraph, curNode, first_succ, endAction, pathID, POR)
-
-
-class Extractor:
-    def __init__(self):
-        ...
-
-    def extract(self, action, prev_state, cur_state):
-        raise NotImplementedError('extract() is not implemented')
     
 
 """
 Main function
 """
 def main(extractor: Extractor):
-    if (len(sys.argv) > 3):
-        end = sys.argv[1]
-        path = sys.argv[2]
-        dir = sys.argv[3]
+    if (len(sys.argv) > 2):
+        end = "END_ACTION"
+        path = sys.argv[1]
+        dir = sys.argv[2]
         POR = False
-        if (len(sys.argv) == 5):
-            if (sys.argv[4].lower() == 'por'):
+        if (len(sys.argv) == 4):
+            if (sys.argv[3].lower() == 'por'):
                 POR = True
     else:
         usage()
