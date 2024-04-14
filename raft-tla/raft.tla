@@ -135,7 +135,7 @@ Max(s) == CHOOSE x \in s : \A y \in s : x >= y
 
 \* Force serve 1 to be leader so that the trace can be non-trivial; any node can become candidate anyways.
 InitServerVars == /\ currentTerm = [i \in Server |-> IF i = 1 THEN 1 ELSE 1]
-                  /\ state       = [i \in Server |-> IF i = 1 THEN Follower ELSE Follower] 
+                  /\ state       = [i \in Server |-> IF i = 1 THEN Leader ELSE Follower] 
                   /\ votedFor    = [i \in Server |-> Nil]
 InitCandidateVars == /\ votesResponded = [i \in Server |-> {}]
                      /\ votesGranted   = [i \in Server |-> {}]
@@ -473,7 +473,7 @@ Spec == Init /\ [][Next]_vars
 
 TERM_LIMIT == \A i \in Server : currentTerm[i] <= 2
 NUM_PENDING_MESSAGES_LIMIT == 
-    /\ Cardinality(DOMAIN messages) <= 3
+    /\ Cardinality(DOMAIN messages) <= 2
     /\ \A m \in DOMAIN messages : messages[m] <= 1
 CLIENT_REQUEST_LIMIT == clientRequestValue <= 2
 STEP_LIMIT == step <= 12

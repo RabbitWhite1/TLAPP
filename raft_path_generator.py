@@ -61,7 +61,7 @@ class RaftMessage:
             res.mtype = "ClientResponse"
             res.msource = kwargs['source']
             return res
-        elif (matched := re.match(r"\[mtype\|->AppendEntriesRequest,mterm\|->(\d+),msource\|->(\d+),mdest\|->(\d+),mprevLogIndex\|->(\d+),mprevLogTerm\|->(\d+),mentries\|-><<(.*)>>,mlog\|-><<.*>>,mcommitIndex\|->(\d+)\]", message)) is not None:
+        elif (matched := re.match(r"\[mtype\|->AE,mterm\|->(\d+),msource\|->(\d+),mdest\|->(\d+),mprevLogIndex\|->(\d+),mprevLogTerm\|->(\d+),mentries\|-><<(.*)>>,mlog\|-><<.*>>,mcommitIndex\|->(\d+)\]", message)) is not None:
             #                                                                1                2              3                      4                     5                  6                                      7
             # mentries format: [term|->1,value|->1]
             res.mtype = "AppendEntriesRequest"
@@ -76,7 +76,7 @@ class RaftMessage:
             else:
                 res.mentries = [res.mentries]
             res.mcommit_index = int(matched.group(7))
-        elif (matched := re.match(r"\[mtype\|->AppendEntriesResponse,mterm\|->(\d+),msource\|->(\d+),mdest\|->(\d+),msuccess\|->(TRUE|FALSE),mmatchIndex\|->(\d+)\]", message)) is not None:
+        elif (matched := re.match(r"\[mtype\|->AER,mterm\|->(\d+),msource\|->(\d+),mdest\|->(\d+),msuccess\|->(TRUE|FALSE),mmatchIndex\|->(\d+)\]", message)) is not None:
             #                                                                   1                 2              3                4                    5
             res.mtype = "AppendEntriesResponse"
             res.mterm = int(matched.group(1))
@@ -84,7 +84,7 @@ class RaftMessage:
             res.mdest = int(matched.group(3))
             res.msuccess = True if (matched.group(4)) == "TRUE" else False
             res.mmatch_index = int(matched.group(5))
-        elif (matched := re.match(r"\[mtype\|->RequestVoteRequest,mterm\|->(\d+),mlastLogTerm\|->(\d+),mlastLogIndex\|->(\d+),msource\|->(\d+),mdest\|->(\d+)\]", message)) is not None:
+        elif (matched := re.match(r"\[mtype\|->RV,mterm\|->(\d+),mlastLogTerm\|->(\d+),mlastLogIndex\|->(\d+),msource\|->(\d+),mdest\|->(\d+)\]", message)) is not None:
             #                                                               1                      2                      3                4              5
             res.mtype = "RequestVoteRequest"
             res.mterm = int(matched.group(1))
@@ -92,7 +92,7 @@ class RaftMessage:
             res.mindex = int(matched.group(3))
             res.msource = int(matched.group(4))
             res.mdest = int(matched.group(5))
-        elif (matched := re.match(r"\[mtype\|->RequestVoteResponse,mterm\|->(\d+),msource\|->(\d+),mdest\|->(\d+),mlog|-><<.*>>,mvoteGranted\|->(TRUE|FALSE)\]", message)) is not None:
+        elif (matched := re.match(r"\[mtype\|->RVR,mterm\|->(\d+),msource\|->(\d+),mdest\|->(\d+),mlog|-><<.*>>,mvoteGranted\|->(TRUE|FALSE)\]", message)) is not None:
             #                                                                 1                 2             3                                      4
             res.mtype = "RequestVoteResponse"
             res.mterm = int(matched.group(1))
