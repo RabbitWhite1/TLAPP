@@ -95,7 +95,7 @@ VARIABLE step
 ----
 
 \* All variables; used for stuttering (asserting state hasn't changed).
-vars == <<clientRequestValue, step, responsedClientRequests, messages, serverVars, candidateVars, leaderVars, logVars>>
+vars == <<clientRequestValue, responsedClientRequests, messages, serverVars, candidateVars, leaderVars, logVars>>
 
 ----
 \* Helpers
@@ -499,7 +499,7 @@ NUM_PENDING_MESSAGES_LIMIT ==
     /\ Cardinality(DOMAIN messages) <= 3
     /\ \A m \in DOMAIN messages : messages[m] <= 2
 CLIENT_REQUEST_LIMIT == clientRequestValue <= 3
-STEP_LIMIT == step < 10
+STEP_LIMIT == step <= 9
 ===============================================================================
 
 \* Changelog:
