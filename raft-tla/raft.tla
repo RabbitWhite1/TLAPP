@@ -35,13 +35,6 @@ VARIABLE messages
 
 \* A history variable used in the proof. This would not be present in an
 \* implementation.
-\* Keeps track of successful elections, including the initial logs of the
-\* leader and voters' logs. Set of functions containing various things about
-\* successful elections (see BecomeLeader).
-VARIABLE elections
-
-\* A history variable used in the proof. This would not be present in an
-\* implementation.
 \* Keeps track of every log ever in the system (set of logs).
 \* VARIABLE allLogs
 
@@ -72,12 +65,7 @@ VARIABLE votesResponded
 \* The set of servers from which the candidate has received a vote in its
 \* currentTerm.
 VARIABLE votesGranted
-\* A history variable used in the proof. This would not be present in an
-\* implementation.
-\* Function from each server that voted for this candidate in its currentTerm
-\* to that voter's log.
-VARIABLE voterLog
-candidateVars == <<votesResponded, votesGranted, voterLog>>
+candidateVars == <<votesResponded, votesGranted>>
 
 \* The following variables are used only on leaders:
 \* The next entry to send to each follower.
@@ -85,7 +73,7 @@ VARIABLE nextIndex
 \* The latest entry that each follower has acknowledged is the same as the
 \* leader's. This is used to calculate commitIndex on the leader.
 VARIABLE matchIndex
-leaderVars == <<nextIndex, matchIndex, elections>>
+leaderVars == <<nextIndex, matchIndex>>
 
 VARIABLE responsedClientRequests
 
@@ -119,7 +107,10 @@ WithMessage(m, msgs) ==
 \* a new bag of messages with one less m in it.
 WithoutMessage(m, msgs) ==
     IF m \in DOMAIN msgs THEN
-        [msgs EXCEPT ![m] = msgs[m] - 1]
+        IF msgs[m] = 1 THEN 
+            [tmpM \in DOMAIN msgs \ {m} |-> msgs[tmpM]]
+        ELSE
+            [msgs EXCEPT ![m] = msgs[m] - 1]
     ELSE
         msgs
 
@@ -142,11 +133,9 @@ Max(s) == CHOOSE x \in s : \A y \in s : x >= y
 ----
 \* Define initial values for all variables
 
-InitHistoryVars == /\ elections = {}
-                   /\ voterLog  = [i \in Server |-> [j \in {} |-> <<>>]]
 \* Force serve 1 to be leader so that the trace can be non-trivial; any node can become candidate anyways.
-InitServerVars == /\ currentTerm = [i \in Server |-> 1]
-                  /\ state       = [i \in Server |-> IF i = 1 THEN Leader ELSE Follower] 
+InitServerVars == /\ currentTerm = [i \in Server |-> IF i = 1 THEN 1 ELSE 1]
+                  /\ state       = [i \in Server |-> IF i = 1 THEN Follower ELSE Follower] 
                   /\ votedFor    = [i \in Server |-> Nil]
 InitCandidateVars == /\ votesResponded = [i \in Server |-> {}]
                      /\ votesGranted   = [i \in Server |-> {}]
@@ -158,7 +147,6 @@ InitLeaderVars == /\ nextIndex  = [i \in Server |-> [j \in Server |-> 2]]
 InitLogVars == /\ log          = [i \in Server |-> << [term |-> 1, value |-> 0] >>]
                /\ commitIndex  = [i \in Server |-> 1]
 Init == /\ messages = [m \in {} |-> 0]
-        /\ InitHistoryVars
         /\ InitServerVars
         /\ InitCandidateVars
         /\ InitLeaderVars
@@ -176,12 +164,11 @@ Restart(i) ==
     /\ state'          = [state EXCEPT ![i] = Follower]
     /\ votesResponded' = [votesResponded EXCEPT ![i] = {}]
     /\ votesGranted'   = [votesGranted EXCEPT ![i] = {}]
-    /\ voterLog'       = [voterLog EXCEPT ![i] = [j \in {} |-> <<>>]]
     /\ nextIndex'      = [nextIndex EXCEPT ![i] = [j \in Server |-> 1]]
     /\ matchIndex'     = [matchIndex EXCEPT ![i] = [j \in Server |-> 0]]
     /\ commitIndex'    = [commitIndex EXCEPT ![i] = 0]
     /\ step' = step+1
-    /\ UNCHANGED <<messages, currentTerm, votedFor, log, elections, responsedClientRequests, clientRequestValue>>
+    /\ UNCHANGED <<messages, currentTerm, votedFor, log, responsedClientRequests, clientRequestValue>>
 
 \* Server i times out and starts a new election.
 Timeout(i) == /\ state[i] \in {Follower, Candidate}
@@ -192,7 +179,6 @@ Timeout(i) == /\ state[i] \in {Follower, Candidate}
               /\ votedFor' = [votedFor EXCEPT ![i] = Nil]
               /\ votesResponded' = [votesResponded EXCEPT ![i] = {}]
               /\ votesGranted'   = [votesGranted EXCEPT ![i] = {}]
-              /\ voterLog'       = [voterLog EXCEPT ![i] = [j \in {} |-> <<>>]]
               /\ step' = step+1
               /\ UNCHANGED <<messages, leaderVars, logVars, responsedClientRequests, clientRequestValue>>
 
@@ -246,12 +232,6 @@ BecomeLeader(i) ==
                          [j \in Server |-> Len(log[i]) + 1]]
     /\ matchIndex' = [matchIndex EXCEPT ![i] =
                          [j \in Server |-> 0]]
-    /\ elections'  = elections \cup
-                         {[eterm     |-> currentTerm[i],
-                           eleader   |-> i,
-                           elog      |-> log[i],
-                           evotes    |-> votesGranted[i],
-                           evoterLog |-> voterLog[i]]}
     /\ step' = step+1
     /\ UNCHANGED <<messages, currentTerm, votedFor, candidateVars, logVars, responsedClientRequests, clientRequestValue>>
 
@@ -331,10 +311,8 @@ HandleRequestVoteResponse(i, j, m) ==
     /\ \/ /\ m.mvoteGranted
           /\ votesGranted' = [votesGranted EXCEPT ![i] =
                                   votesGranted[i] \cup {j}]
-          /\ voterLog' = [voterLog EXCEPT ![i] =
-                              voterLog[i] @@ (j :> m.mlog)]
        \/ /\ ~m.mvoteGranted
-          /\ UNCHANGED <<votesGranted, voterLog>>
+          /\ UNCHANGED <<votesGranted>>
     /\ Discard(m)
     /\ UNCHANGED <<serverVars, votedFor, leaderVars, logVars, responsedClientRequests, clientRequestValue>>
 
@@ -365,7 +343,7 @@ HandleAppendEntriesRequest(i, j, m) ==
              /\ m.mterm = currentTerm[i]
              /\ state[i] = Candidate
              /\ state' = [state EXCEPT ![i] = Follower]
-             /\ UNCHANGED <<currentTerm, votedFor, logVars>>
+             /\ UNCHANGED <<messages, currentTerm, votedFor, logVars>>
           \/ \* accept request
              /\ m.mterm = currentTerm[i]
              /\ state[i] = Follower
@@ -397,13 +375,13 @@ HandleAppendEntriesRequest(i, j, m) ==
                        /\ LET new == [index2 \in 1..(Len(log[i]) - 1) |->
                                           log[i][index2]]
                           IN log' = [log EXCEPT ![i] = new]
-                       /\ UNCHANGED <<serverVars, commitIndex>>
+                       /\ UNCHANGED <<messages, serverVars, commitIndex>>
                    \/ \* no conflict: append entry
                        /\ m.mentries /= << >>
                        /\ Len(log[i]) = m.mprevLogIndex
                        /\ log' = [log EXCEPT ![i] =
                                       Append(log[i], m.mentries[1])]
-                       /\ UNCHANGED <<serverVars, commitIndex>>
+                       /\ UNCHANGED <<messages, serverVars, commitIndex>>
        /\ UNCHANGED <<candidateVars, leaderVars, responsedClientRequests, clientRequestValue>>
 
 \* Server i receives an AppendEntries response from server j with
@@ -418,7 +396,7 @@ HandleAppendEntriesResponse(i, j, m) ==
                                Max({nextIndex[i][j] - 1, 1})]
           /\ UNCHANGED <<matchIndex>>
     /\ Discard(m)
-    /\ UNCHANGED <<serverVars, candidateVars, logVars, elections, responsedClientRequests, clientRequestValue>>
+    /\ UNCHANGED <<serverVars, candidateVars, logVars, responsedClientRequests, clientRequestValue>>
 
 \* Any RPC with a newer term causes the recipient to advance its term first.
 UpdateTerm(i, j, m) ==
@@ -427,7 +405,7 @@ UpdateTerm(i, j, m) ==
     /\ state'          = [state       EXCEPT ![i] = Follower]
     /\ votedFor'       = [votedFor    EXCEPT ![i] = Nil]
        \* messages is unchanged so m can be processed further.
-    /\ UNCHANGED <<candidateVars, leaderVars, logVars, responsedClientRequests, clientRequestValue>>
+    /\ UNCHANGED <<messages, candidateVars, leaderVars, logVars, responsedClientRequests, clientRequestValue>>
 
 \* Responses with stale terms are ignored.
 DropStaleResponse(i, j, m) ==
@@ -442,7 +420,6 @@ Receive(m) ==
     IN \* Any RPC with a newer term causes the recipient to advance
        \* its term first. Responses with stale terms are ignored.
        /\ step' = step+1
-       /\ Discard(m)
        /\ \/ UpdateTerm(i, j, m)
           \/ /\ m.mtype = RequestVoteRequest
              /\ HandleRequestVoteRequest(i, j, m)
@@ -494,12 +471,12 @@ Next == \/ \E i \in Server : Restart(i)
 Spec == Init /\ [][Next]_vars
 
 
-TERM_LIMIT == \A i \in Server : currentTerm[i] <= 3
+TERM_LIMIT == \A i \in Server : currentTerm[i] <= 2
 NUM_PENDING_MESSAGES_LIMIT == 
     /\ Cardinality(DOMAIN messages) <= 3
-    /\ \A m \in DOMAIN messages : messages[m] <= 2
-CLIENT_REQUEST_LIMIT == clientRequestValue <= 3
-STEP_LIMIT == step <= 9
+    /\ \A m \in DOMAIN messages : messages[m] <= 1
+CLIENT_REQUEST_LIMIT == clientRequestValue <= 2
+STEP_LIMIT == step <= 12
 ===============================================================================
 
 \* Changelog:
