@@ -26,7 +26,7 @@ CONSTANTS RequestVoteRequest, RequestVoteResponse,
 ----
 \* Global variables
 
-VARIABLE clientRequestValue
+VARIABLE nextClientRequestValue
 
 \* A bag of records representing requests and responses sent from one server
 \* to another. TLAPS doesn't support the Bags module, so this is a function
@@ -83,7 +83,7 @@ VARIABLE step
 ----
 
 \* All variables; used for stuttering (asserting state hasn't changed).
-vars == <<clientRequestValue, responsedClientRequests, messages, serverVars, candidateVars, leaderVars, logVars>>
+vars == <<nextClientRequestValue, responsedClientRequests, messages, serverVars, candidateVars, leaderVars, logVars>>
 
 ----
 \* Helpers
@@ -151,7 +151,7 @@ Init == /\ messages = [m \in {} |-> 0]
         /\ InitCandidateVars
         /\ InitLeaderVars
         /\ InitLogVars
-        /\ clientRequestValue = 1
+        /\ nextClientRequestValue = 1
         /\ responsedClientRequests = [i \in Server |-> { }]
         /\ step = 0
 
@@ -168,7 +168,7 @@ Restart(i) ==
     /\ matchIndex'     = [matchIndex EXCEPT ![i] = [j \in Server |-> 0]]
     /\ commitIndex'    = [commitIndex EXCEPT ![i] = 0]
     /\ step' = step+1
-    /\ UNCHANGED <<messages, currentTerm, votedFor, log, responsedClientRequests, clientRequestValue>>
+    /\ UNCHANGED <<messages, currentTerm, votedFor, log, responsedClientRequests, nextClientRequestValue>>
 
 \* Server i times out and starts a new election.
 Timeout(i) == /\ state[i] \in {Follower, Candidate}
@@ -180,7 +180,7 @@ Timeout(i) == /\ state[i] \in {Follower, Candidate}
               /\ votesResponded' = [votesResponded EXCEPT ![i] = {}]
               /\ votesGranted'   = [votesGranted EXCEPT ![i] = {}]
               /\ step' = step+1
-              /\ UNCHANGED <<messages, leaderVars, logVars, responsedClientRequests, clientRequestValue>>
+              /\ UNCHANGED <<messages, leaderVars, logVars, responsedClientRequests, nextClientRequestValue>>
 
 \* Candidate i sends j a RequestVote request.
 RequestVote(i, j) ==
@@ -193,7 +193,7 @@ RequestVote(i, j) ==
              msource       |-> i,
              mdest         |-> j])
     /\ step' = step+1
-    /\ UNCHANGED <<serverVars, candidateVars, leaderVars, logVars, responsedClientRequests, clientRequestValue>>
+    /\ UNCHANGED <<serverVars, candidateVars, leaderVars, logVars, responsedClientRequests, nextClientRequestValue>>
 
 \* Leader i sends j an AppendEntries request containing up to 1 entry.
 \* While implementations may want to send more than 1 at a time, this spec uses
@@ -221,7 +221,7 @@ AppendEntries(i, j) ==
                 mcommitIndex   |-> commitIndex[i],
                 msource        |-> i,
                 mdest          |-> j])
-    /\ UNCHANGED <<serverVars, candidateVars, leaderVars, logVars, responsedClientRequests, clientRequestValue>>
+    /\ UNCHANGED <<serverVars, candidateVars, leaderVars, logVars, responsedClientRequests, nextClientRequestValue>>
 
 \* Candidate i transitions to leader.
 BecomeLeader(i) ==
@@ -233,17 +233,17 @@ BecomeLeader(i) ==
     /\ matchIndex' = [matchIndex EXCEPT ![i] =
                          [j \in Server |-> 0]]
     /\ step' = step+1
-    /\ UNCHANGED <<messages, currentTerm, votedFor, candidateVars, logVars, responsedClientRequests, clientRequestValue>>
+    /\ UNCHANGED <<messages, currentTerm, votedFor, candidateVars, logVars, responsedClientRequests, nextClientRequestValue>>
 
 \* Leader i receives a client request to add v to the log.
 ClientRequest(i) ==
     /\ state[i] = Leader
     /\ LET entry == [term  |-> currentTerm[i],
-                     value |-> clientRequestValue]
+                     value |-> nextClientRequestValue]
            newLog == Append(log[i], entry)
        IN  log' = [log EXCEPT ![i] = newLog]
     /\ step' = step+1
-    /\ clientRequestValue' = clientRequestValue + 1
+    /\ nextClientRequestValue' = nextClientRequestValue + 1
     /\ UNCHANGED <<messages, serverVars, candidateVars,
                    leaderVars, commitIndex, responsedClientRequests>>
 
@@ -271,7 +271,7 @@ AdvanceCommitIndex(i) ==
        IN /\ commitIndex' = [commitIndex EXCEPT ![i] = newCommitIndex]
           /\ responsedClientRequests' = [responsedClientRequests EXCEPT ![i] = responsedClientRequests[i] \cup {log[i][index].value : index \in commitIndex[i]+1..newCommitIndex}]
 
-    /\ UNCHANGED <<messages, serverVars, candidateVars, leaderVars, log, clientRequestValue>>
+    /\ UNCHANGED <<messages, serverVars, candidateVars, leaderVars, log, nextClientRequestValue>>
 
 ----
 \* Message handlers
@@ -298,7 +298,7 @@ HandleRequestVoteRequest(i, j, m) ==
                  msource      |-> i,
                  mdest        |-> j],
                  m)
-       /\ UNCHANGED <<state, currentTerm, candidateVars, leaderVars, logVars, responsedClientRequests, clientRequestValue>>
+       /\ UNCHANGED <<state, currentTerm, candidateVars, leaderVars, logVars, responsedClientRequests, nextClientRequestValue>>
 
 \* Server i receives a RequestVote response from server j with
 \* m.mterm = currentTerm[i].
@@ -314,7 +314,7 @@ HandleRequestVoteResponse(i, j, m) ==
        \/ /\ ~m.mvoteGranted
           /\ UNCHANGED <<votesGranted>>
     /\ Discard(m)
-    /\ UNCHANGED <<serverVars, votedFor, leaderVars, logVars, responsedClientRequests, clientRequestValue>>
+    /\ UNCHANGED <<serverVars, votedFor, leaderVars, logVars, responsedClientRequests, nextClientRequestValue>>
 
 \* Server i receives an AppendEntries request from server j with
 \* m.mterm <= currentTerm[i]. This just handles m.entries of length 0 or 1, but
@@ -383,7 +383,7 @@ HandleAppendEntriesRequest(i, j, m) ==
                        /\ log' = [log EXCEPT ![i] =
                                       log[i] \o m.mentries]
                        /\ UNCHANGED <<messages, serverVars, commitIndex>>
-       /\ UNCHANGED <<candidateVars, leaderVars, responsedClientRequests, clientRequestValue>>
+       /\ UNCHANGED <<candidateVars, leaderVars, responsedClientRequests, nextClientRequestValue>>
 
 \* Server i receives an AppendEntries response from server j with
 \* m.mterm = currentTerm[i].
@@ -397,7 +397,7 @@ HandleAppendEntriesResponse(i, j, m) ==
                                Max({nextIndex[i][j] - 1, 1})]
           /\ UNCHANGED <<matchIndex>>
     /\ Discard(m)
-    /\ UNCHANGED <<serverVars, candidateVars, logVars, responsedClientRequests, clientRequestValue>>
+    /\ UNCHANGED <<serverVars, candidateVars, logVars, responsedClientRequests, nextClientRequestValue>>
 
 \* Any RPC with a newer term causes the recipient to advance its term first.
 UpdateTerm(i, j, m) ==
@@ -406,13 +406,13 @@ UpdateTerm(i, j, m) ==
     /\ state'          = [state       EXCEPT ![i] = Follower]
     /\ votedFor'       = [votedFor    EXCEPT ![i] = Nil]
        \* messages is unchanged so m can be processed further.
-    /\ UNCHANGED <<messages, candidateVars, leaderVars, logVars, responsedClientRequests, clientRequestValue>>
+    /\ UNCHANGED <<messages, candidateVars, leaderVars, logVars, responsedClientRequests, nextClientRequestValue>>
 
 \* Responses with stale terms are ignored.
 DropStaleResponse(i, j, m) ==
     /\ m.mterm < currentTerm[i]
     /\ Discard(m)
-    /\ UNCHANGED <<serverVars, candidateVars, leaderVars, logVars, responsedClientRequests, clientRequestValue>>
+    /\ UNCHANGED <<serverVars, candidateVars, leaderVars, logVars, responsedClientRequests, nextClientRequestValue>>
 
 \* Receive a message.
 Receive(m) ==
@@ -441,13 +441,13 @@ Receive(m) ==
 DuplicateMessage(m) ==
     /\ step' = step+1
     /\ Send(m)
-    /\ UNCHANGED <<serverVars, candidateVars, leaderVars, logVars, responsedClientRequests, clientRequestValue>>
+    /\ UNCHANGED <<serverVars, candidateVars, leaderVars, logVars, responsedClientRequests, nextClientRequestValue>>
 
 \* The network drops a message
 DropMessage(m) ==
     /\ step' = step+1
     /\ Discard(m)
-    /\ UNCHANGED <<serverVars, candidateVars, leaderVars, logVars, responsedClientRequests, clientRequestValue>>
+    /\ UNCHANGED <<serverVars, candidateVars, leaderVars, logVars, responsedClientRequests, nextClientRequestValue>>
 
 ----
 
@@ -475,7 +475,7 @@ TERM_LIMIT == \A i \in Server : currentTerm[i] <= 2
 NUM_PENDING_MESSAGES_LIMIT == TRUE
     \* /\ Cardinality(DOMAIN messages) <= 2
     \* /\ \A m \in DOMAIN messages : messages[m] <= 1
-CLIENT_REQUEST_LIMIT == clientRequestValue <= 2
+CLIENT_REQUEST_LIMIT == nextClientRequestValue <= 3
 STEP_LIMIT == step <= 12
 ===============================================================================
 
