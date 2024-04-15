@@ -208,7 +208,7 @@ AppendEntries(i, j) ==
                           ELSE
                               0
            \* Send up to 1 entry, constrained by the end of the log.
-           lastEntry == Min({Len(log[i]), nextIndex[i][j]})
+           lastEntry == Len(log[i])
            entries == SubSeq(log[i], nextIndex[i][j], lastEntry)
        IN Send([mtype          |-> AppendEntriesRequest,
                 mterm          |-> currentTerm[i],
@@ -218,7 +218,7 @@ AppendEntries(i, j) ==
                 \* mlog is used as a history variable for the proof.
                 \* It would not exist in a real implementation.
                 mlog           |-> log[i],
-                mcommitIndex   |-> Min({commitIndex[i], lastEntry}),
+                mcommitIndex   |-> commitIndex[i],
                 msource        |-> i,
                 mdest          |-> j])
     /\ UNCHANGED <<serverVars, candidateVars, leaderVars, logVars, responsedClientRequests, clientRequestValue>>
@@ -348,12 +348,13 @@ HandleAppendEntriesRequest(i, j, m) ==
              /\ m.mterm = currentTerm[i]
              /\ state[i] = Follower
              /\ logOk
-             /\ LET index == m.mprevLogIndex + 1
+             /\ LET first_index == m.mprevLogIndex + 1
+                    last_index == m.mprevLogIndex + Len(m.mentries)
                 IN \/ \* already done with request
                        /\ \/ m.mentries = << >>
                           \/ /\ m.mentries /= << >>
-                             /\ Len(log[i]) >= index
-                             /\ log[i][index].term = m.mentries[1].term
+                             /\ Len(log[i]) >= last_index
+                             /\ log[i][first_index].term = m.mentries[1].term
                           \* This could make our commitIndex decrease (for
                           \* example if we process an old, duplicated request),
                           \* but that doesn't really affect anything.
@@ -370,9 +371,9 @@ HandleAppendEntriesRequest(i, j, m) ==
                        /\ UNCHANGED <<serverVars, log>>
                    \/ \* conflict: remove 1 entry
                        /\ m.mentries /= << >>
-                       /\ Len(log[i]) >= index
-                       /\ log[i][index].term /= m.mentries[1].term
-                       /\ LET new == [index2 \in 1..(Len(log[i]) - 1) |->
+                       /\ Len(log[i]) >= first_index
+                       /\ log[i][first_index].term /= m.mentries[1].term
+                       /\ LET new == [index2 \in 1..(first_index - 1) |->
                                           log[i][index2]]
                           IN log' = [log EXCEPT ![i] = new]
                        /\ UNCHANGED <<messages, serverVars, commitIndex>>
@@ -380,7 +381,7 @@ HandleAppendEntriesRequest(i, j, m) ==
                        /\ m.mentries /= << >>
                        /\ Len(log[i]) = m.mprevLogIndex
                        /\ log' = [log EXCEPT ![i] =
-                                      Append(log[i], m.mentries[1])]
+                                      log[i] \o m.mentries]
                        /\ UNCHANGED <<messages, serverVars, commitIndex>>
        /\ UNCHANGED <<candidateVars, leaderVars, responsedClientRequests, clientRequestValue>>
 
@@ -455,8 +456,7 @@ DuplicateSomeMessage == \E m \in DOMAIN messages : DuplicateMessage(m)
 DropSomeMessage == \E m \in DOMAIN messages : DropMessage(m)
 
 \* Defines how the variables may transition.
-Next == \/ \E i \in Server : Restart(i)
-        \/ \E i \in Server : Timeout(i)
+Next == \/ \E i \in Server : Timeout(i)
         \/ \E i,j \in Server : RequestVote(i, j)
         \/ \E i \in Server : BecomeLeader(i)
         \/ \E i \in Server : ClientRequest(i)
@@ -472,9 +472,9 @@ Spec == Init /\ [][Next]_vars
 
 
 TERM_LIMIT == \A i \in Server : currentTerm[i] <= 2
-NUM_PENDING_MESSAGES_LIMIT == 
-    /\ Cardinality(DOMAIN messages) <= 2
-    /\ \A m \in DOMAIN messages : messages[m] <= 1
+NUM_PENDING_MESSAGES_LIMIT == TRUE
+    \* /\ Cardinality(DOMAIN messages) <= 2
+    \* /\ \A m \in DOMAIN messages : messages[m] <= 1
 CLIENT_REQUEST_LIMIT == clientRequestValue <= 2
 STEP_LIMIT == step <= 12
 ===============================================================================
