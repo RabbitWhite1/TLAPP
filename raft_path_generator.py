@@ -1,7 +1,7 @@
 import codecs
 import copy
 import re
-from lib_viz import *
+from lib import *
 
 class RaftEntry:
     term: int
