@@ -1,3 +1,6 @@
+class ProtocolObject:
+    def __init__(self):
+        ...
 
 class Extractor:
     def __init__(self):

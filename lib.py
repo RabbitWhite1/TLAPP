@@ -8,7 +8,7 @@ import sys
 import time
 
 import rich.progress
-from extractor import Extractor
+from extractor import Extractor, ProtocolObject
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, TimeElapsedColumn
 
 import tlagraph as tg
@@ -71,12 +71,12 @@ class PathFinder:
             if i == 0:
                 self.edge_file.write(str(node.node_id) + ' ')
             else:
-                self.edge_file.write(action + ' ' + str(node) + ' ')
+                self.edge_file.write(action + ' ' + str(node.node_id) + ' ')
                 # write the diff of two nodes to message file
                 assert prev_node is not None
                 diffs.append(self.extractor.extract(action, prev_node.label, node.label))
         self.edge_file.write('\n')
-        self.message_file.write(json.dumps(diffs, default=lambda o: o.__dict__) + '\n')
+        self.message_file.write(json.dumps(diffs, default=lambda o: None if not isinstance(o, ProtocolObject) else o.to_dict()) + '\n')
 
 """
 Main function

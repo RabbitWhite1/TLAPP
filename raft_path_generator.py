@@ -2,13 +2,16 @@ import codecs
 import copy
 import re
 from lib import *
+from extractor import ProtocolObject
 
-class RaftEntry:
+
+class RaftEntry(ProtocolObject):
     term: int
     value: int
 
     def __init__(self):
-        ...
+        self.term = None
+        self.value = None
 
     @staticmethod
     def parse(entries: str) -> 'RaftEntry':
@@ -23,10 +26,11 @@ class RaftEntry:
         return res
 
     def to_dict(self):
-        return self.__dict__
+        d = {k: v for k, v in self.__dict__.items() if v is not None}
+        return d
     
     
-class RaftMessage:
+class RaftMessage(ProtocolObject):
     mtype: str
     mterm: int
     mindex: int
@@ -43,7 +47,18 @@ class RaftMessage:
     count: int
 
     def __init__(self):
-        ...
+        self.mtype = None
+        self.mterm = None
+        self.mindex = None
+        self.mindex_term = None
+        self.msuccess = None
+        self.mentries = None
+        self.mcommit_index = None
+        self.mmatch_index = None
+        self.msource = None
+        self.mdest = None
+        self.mreq_id = None
+        self.count = None
 
     @staticmethod
     def parse(message: str|int, count: int, hint=None, **kwargs) -> 'RaftMessage':
@@ -104,8 +119,9 @@ class RaftMessage:
         return res
     
     def to_dict(self):
-        d = copy.deepcopy(self.__dict__)
-        d['mentries'] = self.mentries.to_dict()
+        d = {k: v for k, v in self.__dict__.items() if v is not None}
+        if self.mentries is not None:
+            d['mentries'] = [entry.to_dict() for entry in self.mentries]
         return d
     
 
