@@ -1,5 +1,7 @@
 import re
 import subprocess
+import rich
+from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, TimeElapsedColumn, MofNCompleteColumn
 from tqdm import tqdm
 
 class Node:
@@ -38,22 +40,24 @@ class TLAGraph:
         num_lines = int(subprocess.check_output(['wc', '-l', dot_file_path]).decode('utf-8').strip(' \t\r\n').split(' ')[0])
         print(f'Dot file has {num_lines} lines')
         with open(dot_file_path) as dot_file:
-            for _ in tqdm(range(num_lines)):
-                line = dot_file.readline()
-                if line == '':
-                    break
-                # print(line)
-                if (edge_match := re.match(r'([-\d]+) -> ([-\d]+) \[label="(.*?)",', line)):
-                    src_id = int(edge_match.group(1))
-                    dst_id = int(edge_match.group(2))
-                    label = edge_match.group(3)
-                    graph.add_edge(src_id, dst_id, label)
-                elif (node_match := re.match(r'([-\d]+) \[label="(.*?)"', line)):
-                    node_id = int(node_match.group(1))
-                    label = node_match.group(2)
-                    graph.add_node(node_id, label)
-                elif (root_match := re.match(r'\{rank = same; ([-\d]+);\}', line)):
-                    graph.root_id = int(root_match.group(1))
+            with Progress(TextColumn("Parsing dot file"), BarColumn(), MofNCompleteColumn(),
+                          TimeRemainingColumn(), TimeElapsedColumn()) as progress:
+                for _ in progress.track(range(num_lines)):
+                    line = dot_file.readline()
+                    if line == '':
+                        break
+                    # print(line)
+                    if (edge_match := re.match(r'([-\d]+) -> ([-\d]+) \[label="(.*?)",', line)):
+                        src_id = int(edge_match.group(1))
+                        dst_id = int(edge_match.group(2))
+                        label = edge_match.group(3)
+                        graph.add_edge(src_id, dst_id, label)
+                    elif (node_match := re.match(r'([-\d]+) \[label="(.*?)"', line)):
+                        node_id = int(node_match.group(1))
+                        label = node_match.group(2)
+                        graph.add_node(node_id, label)
+                    elif (root_match := re.match(r'\{rank = same; ([-\d]+);\}', line)):
+                        graph.root_id = int(root_match.group(1))
         return graph
     
     def number_of_nodes(self) -> int:
