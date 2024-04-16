@@ -103,7 +103,7 @@ class RaftMessage(ProtocolObject):
             res.mindex = int(matched.group(3))
             res.msource = int(matched.group(4))
             res.mdest = int(matched.group(5))
-        elif (matched := re.match(r"\[mtype\|->RVR,mterm\|->(\d+),msource\|->(\d+),mdest\|->(\d+),mlog|-><<.*>>,mvoteGranted\|->(TRUE|FALSE)\]", message)) is not None:
+        elif (matched := re.match(r"\[mtype\|->RVR,mterm\|->(\d+),msource\|->(\d+),mdest\|->(\d+),mlog\|-><<.*>>,mvoteGranted\|->(TRUE|FALSE)\]", message)) is not None:
             #                                                                 1                 2             3                                      4
             res.mtype = "RequestVoteResponse"
             res.mterm = int(matched.group(1))
