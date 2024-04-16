@@ -9,20 +9,20 @@ class RaftEntry(ProtocolObject):
     term: int
     value: int
 
-    def __init__(self):
-        self.term = None
-        self.value = None
+    def __init__(self, term=None, value=None):
+        self.term = int(term)
+        self.value = int(value)
 
     @staticmethod
-    def parse(entries: str) -> 'RaftEntry':
+    def parse(entries: str) -> list['RaftEntry']:
         if entries == "" or entries is None:
             return None
-        res = RaftEntry()
-        matched = re.match(r"\[term\|->(\d+),value\|->(\d+)\]", entries)
+        matched = re.findall(r"\[term\|->(\d+),value\|->(\d+)\]", entries)
         if matched is None:
             raise Exception(f"Error parsing entries: {entries}")
-        res.term = int(matched.group(1))
-        res.value = int(matched.group(2))
+        res = []
+        for ent in matched:
+            res.append(RaftEntry(term=int(ent[0]), value=int(ent[1])))
         return res
 
     def to_dict(self):
@@ -65,9 +65,9 @@ class RaftMessage(ProtocolObject):
         res = RaftMessage()
         res.count = count
         if hint == "ClientRequest":
-            entry = RaftEntry.parse(message)
-            res.mentries = [entry] # Keep the entry for easy debugging
-            res.mreq_id = entry.value
+            res.mentries = RaftEntry.parse(message) # Keep the entry for easy debugging
+            assert len(res.mentries) == 1
+            res.mreq_id = res.mentries[0].value
             res.mtype = "ClientRequest"
             res.mdest = kwargs['dest']
             return res
@@ -78,7 +78,7 @@ class RaftMessage(ProtocolObject):
             return res
         elif (matched := re.match(r"\[mtype\|->AE,mterm\|->(\d+),msource\|->(\d+),mdest\|->(\d+),mprevLogIndex\|->(\d+),mprevLogTerm\|->(\d+),mentries\|-><<(.*)>>,mlog\|-><<.*>>,mcommitIndex\|->(\d+)\]", message)) is not None:
             #                                                                1                2              3                      4                     5                  6                                      7
-            # mentries format: [term|->1,value|->1]
+            # mentries format: <<[term |-> 1, value |-> 1], [term |-> 1, value |-> 2]>>
             res.mtype = "AppendEntriesRequest"
             res.mterm = int(matched.group(1))
             res.msource = int(matched.group(2))
@@ -86,10 +86,6 @@ class RaftMessage(ProtocolObject):
             res.mindex = int(matched.group(4))
             res.mindex_term = int(matched.group(5))
             res.mentries = RaftEntry.parse(matched.group(6))
-            if res.mentries is None:
-                res.mentries = []
-            else:
-                res.mentries = [res.mentries]
             res.mcommit_index = int(matched.group(7))
         elif (matched := re.match(r"\[mtype\|->AER,mterm\|->(\d+),msource\|->(\d+),mdest\|->(\d+),msuccess\|->(TRUE|FALSE),mmatchIndex\|->(\d+)\]", message)) is not None:
             #                                                                   1                 2              3                4                    5
