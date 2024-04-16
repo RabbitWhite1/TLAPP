@@ -473,8 +473,8 @@ Spec == Init /\ [][Next]_vars
 
 TERM_LIMIT == \A i \in Server : currentTerm[i] <= 2
 NUM_PENDING_MESSAGES_LIMIT == TRUE
-    \* /\ Cardinality(DOMAIN messages) <= 2
-    \* /\ \A m \in DOMAIN messages : messages[m] <= 1
+    /\ Cardinality(DOMAIN messages) <= 3
+    /\ \A m \in DOMAIN messages : messages[m] <= 1
 CLIENT_REQUEST_LIMIT == nextClientRequestValue <= 3
 STEP_LIMIT == step <= 12
 ===============================================================================

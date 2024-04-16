@@ -9,7 +9,7 @@ import time
 
 import rich.progress
 from extractor import Extractor, ProtocolObject
-from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, TimeElapsedColumn
+from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, TimeElapsedColumn, MofNCompleteColumn
 
 import tlagraph as tg
 
@@ -35,30 +35,64 @@ class PathFinder:
         for i, node_id in enumerate(self.graph.nodes()):
             node = self.graph.get_node(node_id)
             self.node_file.write(str(node_id) + ' ' + node.label + '\n')
+
+    def mark_edges_visited(self):
+        for node_id in self.graph.nodes():
+            for edge in self.graph.successor_edges(node_id):
+                edge.visited = False
+
+    def count_path_dfs(self, source: tg.Edge):
+        graph = self.graph
+        source.visited = True
+        if graph.num_successors(source.dst.node_id) == 0:
+            self.num_paths += 1
+            if self.advancer is not None:
+                self.advancer()
+            return
+        for edge in graph.successor_edges(source.dst.node_id):
+            if not edge.visited:
+                self.count_path_dfs(edge)
+
     
     def step_limit_dfs(self, source: tg.Edge, path: list[tuple[int, str]]):
         graph = self.graph
+        source.visited = True
         if len(path)-1 >= self.step_limit or graph.num_successors(source.dst.node_id) == 0:
-            self.count += 1
+            self.num_paths += 1
             if self.advancer is not None:
                 self.advancer()
             self.write_one_path(path)
             return
         for edge in graph.successor_edges(source.dst.node_id):
-            path.append(edge)
-            self.step_limit_dfs(edge, path)
-            path.pop()
+            if not edge.visited:
+                path.append(edge)
+                self.step_limit_dfs(edge, path)
+                path.pop()
 
-    def step_limit_dfs_track(self, source: int):
-        progress = Progress(TextColumn("DFS Writing Paths"), BarColumn(), 
-                            TextColumn("#of paths: {task.completed}"), 
-                            TimeElapsedColumn())
-        task_id = progress.add_task("Path Writing", total=None)
+    def step_limit_dfs_track(self, source: int, num_paths=None, estimate=False) -> int:
+        if estimate:
+            progress = Progress(TextColumn("Estimating #of Paths"), BarColumn(), 
+                                TextColumn("#of paths: {task.completed}"), 
+                                TimeElapsedColumn())
+        else:
+            progress = Progress(TextColumn("DFS Writing Paths"), BarColumn(), 
+                                MofNCompleteColumn(),
+                                TimeElapsedColumn(), TimeRemainingColumn())
+        task_id = progress.add_task("Path Visiting", total=num_paths)
+        self.num_paths = 0
         self.advancer = lambda : progress.advance(task_id)
+        print("Marking edges' visited")
+        self.mark_edges_visited()
+        source_node = self.graph.get_node(source)
+        faked_edge = tg.Edge(None, source_node, None)
         with progress:
-           source_node = self.graph.get_node(source)
-           faked_edge = tg.Edge(None, source_node, None)
-           self.step_limit_dfs(faked_edge, [faked_edge])
+            if estimate:
+                self.count_path_dfs(faked_edge)
+            else:
+                self.step_limit_dfs(faked_edge, [faked_edge])
+        num_paths = self.num_paths
+        del self.num_paths
+        return num_paths
 
     def write_one_path(self, path: list[int]):
         graph = self.graph
@@ -109,4 +143,5 @@ def main(extractor: Extractor):
 
     path_finder = PathFinder(graph, step_limit, extractor, dir)
     path_finder.write_all_nodes()
-    path_finder.step_limit_dfs_track(root)
+    num_paths = path_finder.step_limit_dfs_track(root, estimate=True)
+    path_finder.step_limit_dfs_track(root, num_paths=num_paths)
