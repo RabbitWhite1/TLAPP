@@ -1,0 +1,9 @@
+__pycache__
+.vscode
+test.ipynb
+
+/**/*.edge
+/**/*.message
+/**/*.node
+/**/state.dot
+/**/states
