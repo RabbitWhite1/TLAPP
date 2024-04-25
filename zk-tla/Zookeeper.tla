@@ -726,6 +726,38 @@ PartitionRecover(i, j) ==
                        verifyVars, msgVars, status>>
         /\ UpdateRecorder(<<"PartitionRecover", i, j>>)
 
+NodeRestart(i) == 
+        /\ step' = step + 1
+        /\ CheckCrash(i)
+        /\ \/ /\ IsLooking(i)
+              /\ lastProcessed' = [lastProcessed  EXCEPT ![i] = InitLastProcessed(i)]
+              /\ UNCHANGED <<Parameters, varsL, zabState, connectInfo, msgs, learners,
+                             forwarding, connecting, electing, ackldRecv>>
+           \/ /\ IsFollower(i)
+              /\ lastProcessed' = [lastProcessed  EXCEPT ![i] = InitLastProcessed(i)]
+              /\ LET connectedWithLeader == HasLeader(i)
+                 IN \/ /\ connectedWithLeader
+                       /\ LET leader == connectInfo[i].sid
+                              newCluster == learners[leader] \ {i}
+                          IN 
+                          \/ /\ IsQuorum(newCluster)
+                             /\ RemoveLearner(leader, i) 
+                             /\ FollowerShutdown(i)
+                             /\ Clean(leader, i)
+                          \/ /\ ~IsQuorum(newCluster)
+                             /\ LeaderShutdown(leader)
+                             /\ UNCHANGED <<Parameters, electing, connecting, ackldRecv>>
+                    \/ /\ ~connectedWithLeader
+                       /\ FollowerShutdown(i)
+                       /\ CleanInputBuffer(i)
+                       /\ UNCHANGED <<Parameters, learners, forwarding, connecting, electing, ackldRecv>>
+           \/ /\ IsLeader(i)
+              /\ LeaderShutdown(i)
+              /\ UNCHANGED <<Parameters, electing, connecting, ackldRecv>>
+        /\ lastCommitted' = [lastCommitted  EXCEPT ![i] = lastSnapshot[i]]
+        /\ UNCHANGED <<Parameters, status, acceptedEpoch, lastSnapshot, tempMaxEpoch, initialHistory, verifyVars, packetsSync, partition>>
+        /\ UpdateRecorder(<<"NodeCrash", i>>)
+
 NodeCrash(i) ==
         /\ step' = step + 1
         /\ CheckCrash(i)
@@ -754,8 +786,7 @@ NodeCrash(i) ==
            \/ /\ IsLeader(i)
               /\ LeaderShutdown(i)
               /\ UNCHANGED <<Parameters, electing, connecting, ackldRecv>>
-        /\ UNCHANGED <<Parameters, acceptedEpoch, lastCommitted, lastSnapshot, tempMaxEpoch,
-                       initialHistory, verifyVars, packetsSync, partition>>
+        /\ UNCHANGED <<Parameters, acceptedEpoch, lastCommitted, lastSnapshot, tempMaxEpoch, initialHistory, verifyVars, packetsSync, partition>>
         /\ UpdateRecorder(<<"NodeCrash", i>>)
 
 NodeStart(i) ==
@@ -1961,8 +1992,9 @@ Next ==
         (* situation errors like failure, network partition *)
             \* \/ \E i, j \in Server: PartitionStart(i, j)
             \* \/ \E i, j \in Server: PartitionRecover(i, j)
-            \/ \E i \in Server:    NodeCrash(i)
-            \/ \E i \in Server:    NodeStart(i)
+            \* \/ \E i \in Server:    NodeCrash(i)
+            \* \/ \E i \in Server:    NodeStart(i)
+            \/ \E i \in Server:    NodeRestart(i)
         (* Zab module - Discovery and Synchronization part *)
             \/ \E i, j \in Server: ConnectAndFollowerSendFOLLOWERINFO(i, j)
             \/ \E i, j \in Server: LeaderProcessFOLLOWERINFO(i, j)
@@ -1985,9 +2017,10 @@ Next ==
 
 Spec == Init /\ [][Next]_vars
 
-STEP_LIMIT == step <= 15
+STEP_LIMIT == step <= 18
 ONLINE_MSGS == \A i, j \in Server: 
                   \/ /\ msgs[i][j] /= << >>
+                     /\ electionMsgs[i][j] = << >>
                      /\ \/ /\ \/ msgs[i][j][1].mtype = TRUNC
                               \/ msgs[i][j][1].mtype = DIFF
                            /\ Len(msgs[i][j]) <= 4
@@ -1996,6 +2029,15 @@ ONLINE_MSGS == \A i, j \in Server:
                            /\ msgs[i][j][1].mtype /= DIFF
                            /\ Len(msgs[i][j]) <= 1
                   \/ msgs[i][j] = << >>
+ONLINE_ELECTION_MSGS == \A i, j \in Server: 
+                           \/ /\ electionMsgs[i][j] /= << >>
+                              /\ msgs[i][j] = << >>
+                              /\ Len(electionMsgs[i][j]) <= 1
+                           \/ electionMsgs[i][j] = << >>
+ONLINE_RECV_MSGS == \A i \in Server: 
+                      \/ /\ recvQueue[i] /= << >>
+                         /\ Len(recvQueue[i]) <= 1
+                      \/ recvQueue[i] = << >>
 -----------------------------------------------------------------------------
 \* Define safety properties of Zab 1.0 protocol.
 
