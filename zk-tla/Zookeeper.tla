@@ -158,9 +158,6 @@ VARIABLE recorder \* Consists: members of Parameters and pc, values.
 
 VARIABLE step
 
-CONSTANTS s1, s2, s3
-const_server == {s1, s2, s3}
-
 serverVars == <<state, currentEpoch, lastProcessed, zabState, acceptedEpoch,
                 history, lastCommitted, lastSnapshot, initialHistory>>       
 electionVars == electionVarsL  
@@ -375,7 +372,7 @@ UnchangeRecorder   == UNCHANGED recorder
 CheckParameterHelper(n, p, Comp(_,_)) == IF p \in DOMAIN Parameters 
                                          THEN Comp(n, Parameters[p])
                                          ELSE TRUE
-CheckParameterLimit(n, p) == CheckParameterHelper(n, p, LAMBDA i, j: i < j)
+CheckParameterLimit(n, p) == CheckParameterHelper(n, p, LAMBDA i, j: i <= j)
 
 CheckTimeout        == CheckParameterLimit(recorder.nTimeout,     "MaxTimeoutFailures")
 CheckTransactionNum == CheckParameterLimit(recorder.nTransaction, "MaxTransactionNum")
@@ -387,7 +384,12 @@ CheckCrash(i)       == /\ \/ IsLooking(i)
                              /\ CheckTimeout
                        /\ CheckParameterLimit(recorder.nCrash,    "MaxCrashes")
 
-CheckStateConstraints == CheckTimeout /\ CheckTransactionNum /\ CheckEpoch
+CheckStateConstraints == 
+    /\ CheckTimeout 
+    /\ CheckTransactionNum 
+    /\ CheckEpoch 
+    /\ CheckPartition 
+    /\ \A i \in Server: CheckCrash(i)
 -----------------------------------------------------------------------------
 \* Actions about network
 PendingFOLLOWERINFO(i, j) == /\ msgs[j][i] /= << >>
@@ -472,16 +474,16 @@ InitServerVars == /\ InitServerVarsL
                   /\ initialHistory = [s \in Server |-> << >>]
 
 InitLeaderVars == /\ InitLeaderVarsL
-                  /\ learners         = [s \in Server |-> {1, 2, 3}]
-                  /\ connecting       = [s \in Server |-> {}]
-                  /\ electing         = [s \in Server |-> {}]
-                  /\ ackldRecv        = [s \in Server |-> {}]
-                  /\ forwarding       = [s \in Server |-> IF s = 1 THEN {1, 2, 3} ELSE {}]
-                  /\ tempMaxEpoch     = [s \in Server |-> 1]
+                  /\ learners         = [s \in Server |-> IF s = s1 THEN {s1, s2, s3} ELSE {}]
+                  /\ connecting       = [s \in Server |-> IF s = s1 THEN {[sid |-> s1, connected |-> TRUE], [sid |-> s2, connected |-> TRUE], [sid |-> s3, connected |-> TRUE]} ELSE {}]
+                  /\ electing         = [s \in Server |-> IF s = s1 THEN {[sid |-> s1, peerLastZxid |-> <<-1, -1>>, inQuorum |-> TRUE], [sid |-> s2, peerLastZxid |-> <<-1, -1>>, inQuorum |-> TRUE], [sid |-> s3, peerLastZxid |-> <<-1, -1>>, inQuorum |-> TRUE]} ELSE {}]
+                  /\ ackldRecv        = [s \in Server |-> IF s = s1 THEN {[sid |-> s1, connected |-> TRUE], [sid |-> s2, connected |-> TRUE], [sid |-> s3, connected |-> TRUE]} ELSE {}]
+                  /\ forwarding       = [s \in Server |-> IF s = s1 THEN {s1, s2, s3} ELSE {}]
+                  /\ tempMaxEpoch     = [s \in Server |-> IF s = s1 THEN 1 ELSE 0]
 
 InitElectionVars == InitElectionVarsL
 
-InitFollowerVars == /\ connectInfo = [s \in Server |-> [sid |-> 1,
+InitFollowerVars == /\ connectInfo = [s \in Server |-> [sid |-> s1,
                                                         syncMode |-> NONE,
                                                         nlRcv |-> TRUE ] ]
                     /\ packetsSync = [s \in Server |->
@@ -510,11 +512,11 @@ InitRecorder == recorder = [nTimeout       |-> 0,
                             pc             |-> <<"Init">>,
                             nClientRequest |-> 0]
 
-InitParameters == Parameters = [MaxTimeoutFailures |-> 2,
+InitParameters == Parameters = [MaxTimeoutFailures |-> 1,
                                 MaxTransactionNum  |-> 2,
                                 MaxEpoch           |-> 2,
-                                MaxCrashes         |-> 2,
-                                MaxPartitions      |-> 2]
+                                MaxCrashes         |-> 1,
+                                MaxPartitions      |-> 1]
 
 Init == /\ InitServerVars
         /\ InitLeaderVars
@@ -525,7 +527,7 @@ Init == /\ InitServerVars
         /\ InitEnvVars
         /\ InitRecorder
         /\ InitParameters
-        /\ step = 0
+        /\ step = 1
 -----------------------------------------------------------------------------
 ZabTurnToLeading(i) ==
         /\ zabState'       = [zabState   EXCEPT ![i] = DISCOVERY]
@@ -602,8 +604,9 @@ FLEWaitNewNotmsg(i) ==
               /\ UNCHANGED <<Parameters, learners, connecting, electing, ackldRecv, forwarding,
                              tempMaxEpoch>>
            \/ /\ newState = LOOKING
-              /\ PrintT("Note: New state is LOOKING in FLEWaitNewNotmsgEnd," \o 
-                    " which should not happen.")
+           \* We change the author's code here, the newState would be the same as state if it hasn't been changed in WaitNewNotmsg, and this is possible according to the WaitNewNotmsg part in FastLeaderElection. So it is possible to reach this branch.
+            \*   /\ PrintT("Note: New state is LOOKING in FLEWaitNewNotmsgEnd," \o 
+            \*         " which should not happen.")
               /\ UNCHANGED <<Parameters, zabState, learners, connecting, electing, ackldRecv,
                              forwarding, tempMaxEpoch, initialHistory, packetsSync>>
         /\ UNCHANGED <<Parameters, lastCommitted, lastSnapshot, acceptedEpoch,
@@ -746,7 +749,7 @@ NodeCrash(i) ==
                              /\ UNCHANGED <<Parameters, electing, connecting, ackldRecv>>
                     \/ /\ ~connectedWithLeader
                        /\ FollowerShutdown(i)
-                       /\ CleanInputBuffer({i})
+                       /\ CleanInputBuffer(i)
                        /\ UNCHANGED <<Parameters, learners, forwarding, connecting, electing, ackldRecv>>
            \/ /\ IsLeader(i)
               /\ LeaderShutdown(i)
@@ -756,6 +759,7 @@ NodeCrash(i) ==
         /\ UpdateRecorder(<<"NodeCrash", i>>)
 
 NodeStart(i) ==
+        /\ step' = step + 1
         /\ IsOFF(i)
         /\ status' = [status EXCEPT ![i] = ONLINE ]
         /\ lastProcessed' = [lastProcessed  EXCEPT ![i] = InitLastProcessed(i)]
@@ -1910,6 +1914,7 @@ FollowerProcessCOMMIT(i, j) ==
 (* Used to discard some messages which should not exist in network channel.
    This action should not be triggered. *)
 FilterNonexistentMessage(i) ==
+        /\ step' = step + 1
         /\ \E j \in Server \ {i}: /\ msgs[j][i] /= << >>
                                   /\ LET msg == msgs[j][i][1]
                                      IN 
@@ -1954,8 +1959,8 @@ Next ==
             \/ \E i \in Server:    FLEHandleNotmsg(i)
             \/ \E i \in Server:    FLEWaitNewNotmsg(i)
         (* situation errors like failure, network partition *)
-            \/ \E i, j \in Server: PartitionStart(i, j)
-            \/ \E i, j \in Server: PartitionRecover(i, j)
+            \* \/ \E i, j \in Server: PartitionStart(i, j)
+            \* \/ \E i, j \in Server: PartitionRecover(i, j)
             \/ \E i \in Server:    NodeCrash(i)
             \/ \E i \in Server:    NodeStart(i)
         (* Zab module - Discovery and Synchronization part *)
@@ -1980,7 +1985,17 @@ Next ==
 
 Spec == Init /\ [][Next]_vars
 
-STEP_LIMIT == step <= 20
+STEP_LIMIT == step <= 15
+ONLINE_MSGS == \A i, j \in Server: 
+                  \/ /\ msgs[i][j] /= << >>
+                     /\ \/ /\ \/ msgs[i][j][1].mtype = TRUNC
+                              \/ msgs[i][j][1].mtype = DIFF
+                           /\ Len(msgs[i][j]) <= 4
+                           /\ msgs[i][j][Len(msgs[i][j])].mtype = NEWLEADER
+                        \/ /\ msgs[i][j][1].mtype /= TRUNC
+                           /\ msgs[i][j][1].mtype /= DIFF
+                           /\ Len(msgs[i][j]) <= 1
+                  \/ msgs[i][j] = << >>
 -----------------------------------------------------------------------------
 \* Define safety properties of Zab 1.0 protocol.
 

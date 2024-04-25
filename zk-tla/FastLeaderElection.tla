@@ -40,6 +40,9 @@ CONSTANTS NOTIFICATION
 CONSTANT NONE
 
 CONSTANT NONE_SERVER
+
+CONSTANTS s1, s2, s3
+const_server == {s1, s2, s3}
 -----------------------------------------------------------------------------
 Quorums == {Q \in SUBSET Server: Cardinality(Q)*2 > Cardinality(Server)}
 
@@ -249,8 +252,8 @@ InitServerVarsL == /\ state         = [s \in Server |-> IF s = 1 THEN LEADING EL
                                                          zxid  |-> <<0, 0>>] ]
                    /\ history       = [s \in Server |-> << >>]
 
-InitElectionVarsL == /\ currentVote   = [s \in Server |-> SelfVote(s)]
-                     /\ logicalClock  = [s \in Server |-> 0]
+InitElectionVarsL == /\ currentVote   = [s \in Server |-> SelfVote(s1)]
+                     /\ logicalClock  = [s \in Server |-> 1]
                      /\ receiveVotes  = [s \in Server |-> [v \in Server |-> [vote    |-> InitialVote,
                                                                              round   |-> 0,
                                                                              state   |-> LOOKING,
