@@ -38,10 +38,12 @@ CONSTANTS NOTIFICATION
 
 \* Timeout signal
 CONSTANT NONE
+
+CONSTANT NONE_SERVER
 -----------------------------------------------------------------------------
 Quorums == {Q \in SUBSET Server: Cardinality(Q)*2 > Cardinality(Server)}
 
-NullPoint == CHOOSE p: p \notin Server
+NullPoint == NONE_SERVER
 
 -----------------------------------------------------------------------------
 \* Server's state(LOOKING, FOLLOWING, LEADING).
@@ -241,7 +243,7 @@ OoePut(i, id, mvote, mround, mstate) == outOfElection' = CASE outOfElection[i][i
                                                          []   outOfElection[i][id].round > mround -> outOfElection
                                                                                                                              
 -----------------------------------------------------------------------------    
-InitServerVarsLL == /\ state         = [s \in Server |-> IF s == 1 THEN LEADING ELSE FOLLOWING]
+InitServerVarsL == /\ state         = [s \in Server |-> IF s = 1 THEN LEADING ELSE FOLLOWING]
                    /\ currentEpoch  = [s \in Server |-> 1]
                    /\ lastProcessed = [s \in Server |-> [index |-> 0,
                                                          zxid  |-> <<0, 0>>] ]
