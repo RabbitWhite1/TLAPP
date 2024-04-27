@@ -245,14 +245,14 @@ class ZKExtractor(Extractor):
             prev_history = get_hisotry_from_state(prev_state)
             cur_history = get_hisotry_from_state(cur_state)
             dst, req_id = get_history_diff_req_id(prev_history, cur_history)
-            return {"action": action, "diff": [ZkMessage.makeClientRequest(req_id, dst=dst, count=1)]}
+            return {"action": action, "diff": [ZkMessage.makeClientRequest(req_id, dst=dst, count=-1)]}
         elif action == 'LeaderProcessACK':
             committed, src = get_last_committed_diff(prev_state, cur_state)
             if committed is None:
                 return {"action": action, "diff": []}
             else:
                 req_id = get_req_id(cur_state, committed, src)
-                return {"action": action, "diff": [ZkMessage.makeClientResponse(req_id, src=src, count=-1)]}
+                return {"action": action, "diff": [ZkMessage.makeClientResponse(req_id, src=src, count=1)]}
         else:
             prev_node_messages = get_messages_from_state(prev_state)
             node_messages = get_messages_from_state(cur_state)
