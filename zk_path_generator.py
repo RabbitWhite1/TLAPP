@@ -120,9 +120,9 @@ class ZkMessage(ProtocolObject):
         return d
 
 pp_message = pp.Suppress("[") + pp.Word(pp.srange(r"[a-zA-Z0-9_|\->,<>{}]")) + pp.Suppress("]")
-pp_channel = pp.Suppress('<<') + pp.Group(pp.Empty() ^ pp.delimited_list(pp_message, ',')) + pp.Suppress('>>')
-pp_node_channels = pp.Suppress('<<') + pp.Group(pp.Empty() ^ pp.delimited_list(pp_channel, ',')) + pp.Suppress('>>')
-pp_all_nodes_channels = pp.Suppress('<<') + pp.Group(pp.Empty() ^ pp.delimited_list(pp_node_channels, ',')) + pp.Suppress('>>')
+pp_channel = pp.Suppress('<<') + pp.Group(pp.Empty() ^ pp.delimitedList(pp_message, ',')) + pp.Suppress('>>')
+pp_node_channels = pp.Suppress('<<') + pp.Group(pp.Empty() ^ pp.delimitedList(pp_channel, ',')) + pp.Suppress('>>')
+pp_all_nodes_channels = pp.Suppress('<<') + pp.Group(pp.Empty() ^ pp.delimitedList(pp_node_channels, ',')) + pp.Suppress('>>')
 
 def get_nested_parser(num_elements_per_layer, left='<<', right='>>'):
     pattern = r'<<(.*)>>'
@@ -133,13 +133,15 @@ def get_nested_parser(num_elements_per_layer, left='<<', right='>>'):
         total *= num_elements
     def parser(s):
         res = re.match(pattern, s).groups()
-        res = [[item.strip('[]') for item in re.findall(r'\[.*\]', res_i)] for res_i in res]
+        res = [[item.strip('[]') for item in re.findall(r'\[.*?\]', res_i)] for res_i in res]
         for num_elements in reversed(num_elements_per_layer):
             res = list(partition(num_elements, res))
         return res
 
     return parser
 
+def pp_channel_parser(s):
+    return [[item.strip('[]') for item in re.findall(r'\[.*?\]', s)]]
 pp_node_channels_parser = get_nested_parser([num_nodes])
 pp_all_nodes_channels_parser = get_nested_parser([num_nodes, num_nodes])
 
@@ -204,7 +206,8 @@ def get_history_diff_req_id(prev_history, cur_history) -> tuple[int, int]:
 
 def get_last_committed(prev_state) -> list[int]:
     last_committed = [variable for variable in codecs.decode(prev_state, 'unicode_escape').split('/\\') if variable.startswith(f' lastCommitted')][0].replace('\n', '').replace(' ', '').lstrip('lastCommitted=')
-    last_committed = pp_channel.parse_string(last_committed).as_list()[0]
+    # last_committed = pp_channel.parse_string(last_committed).as_list()[0]
+    last_committed = pp_channel_parser(last_committed)[0]
     last_committed = [int(re.match(r'zxid\|-><<\d+,\d+>>,index\|->(\d+)', last_committed_i).group(1)) for last_committed_i in last_committed]
     return last_committed
 
@@ -223,7 +226,7 @@ def get_last_committed_diff(prev_state, cur_state) -> tuple[int, int]:
 
 def get_req_id(state, index, src):
     history = [variable for variable in codecs.decode(state, 'unicode_escape').split('/\\') if variable.startswith(f' history')][0].replace('\n', '').replace(' ', '').lstrip('history=')
-    history = pp_node_channels.parse_string(history).as_list()[0][src-1]
+    history = pp_node_channels_parser(history)[0][src-1]
     req_id = int(re.match(r'zxid\|-><<\d+,\d+>>,value\|->(\d+),ackSid\|->\{.*\},epoch\|->\d+', history[index-1]).group(1))
     return req_id
 
