@@ -52,7 +52,7 @@ class TLAGraph:
                         dst_id = int(edge_match.group(2))
                         label = edge_match.group(3)
                         graph.add_edge(src_id, dst_id, label)
-                    elif (node_match := re.match(r'([-\d]+) \[label="(.*?)"', line)):
+                    elif (node_match := re.match(r'([-\d]+) \[label="(.*)"', line)):
                         node_id = int(node_match.group(1))
                         label = node_match.group(2)
                         graph.add_node(node_id, label)
