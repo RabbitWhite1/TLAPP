@@ -82,23 +82,6 @@ class ZkMessage(ProtocolObject):
             res.mtype = "AE"
             res.mzxid = (int(matched.group(1)) << 32) | int(matched.group(2))
             res.mepoch = int(matched.group(2))
-        elif (matched := re.match(r"mtype\|->DF,mzxid\|-><<(\d+),(\d+)>>", message)):
-            # DIFF
-            res.mtype = "DF"
-            res.mzxid = (int(matched.group(1)) << 32) | int(matched.group(2))
-        elif (matched := re.match(r"mtype\|->TC,mtruncZxid\|-><<(\d+),(\d+)>>", message)):
-            # TRUNC
-            res.mtype = "TC"
-            res.mzxid = (int(matched.group(1)) << 32) | int(matched.group(2))
-        elif (matched := re.match(r"mtype\|->PP,mzxid\|-><<(\d+),(\d+)>>,mdata\|->(\d+)", message)):
-            # PROPOSAL
-            res.mtype = "PP"
-            res.mzxid = (int(matched.group(1)) << 32) | int(matched.group(2))
-            res.mreq_id = int(matched.group(3))
-        elif (matched := re.match(r"mtype\|->CT,mzxid\|-><<(\d+),(\d+)>>", message)):
-            # COMMIT
-            res.mtype = "CT"
-            res.mzxid = (int(matched.group(1)) << 32) | int(matched.group(2))
         elif (matched := re.match(r"mtype\|->NL,mzxid\|-><<(\d+),(\d+)>>", message)):
             # NEWLEADER
             res.mtype = "NL"
@@ -107,9 +90,30 @@ class ZkMessage(ProtocolObject):
             # ACKLD
             res.mtype = "AL"
             res.mzxid = (int(matched.group(1)) << 32) | int(matched.group(2))
+        elif (matched := re.match(r"mtype\|->UT,mzxid\|-><<(\d+),(\d+)>>", message)):
+            # UPTODATE
+            res.mtype = "UT"
+            res.mzxid = (int(matched.group(1)) << 32) | int(matched.group(2))
+        elif (matched := re.match(r"mtype\|->PP,mzxid\|-><<(\d+),(\d+)>>,mdata\|->(\d+)", message)):
+            # PROPOSAL
+            res.mtype = "PP"
+            res.mzxid = (int(matched.group(1)) << 32) | int(matched.group(2))
+            res.mreq_id = int(matched.group(3))
         elif (matched := re.match(r"mtype\|->AK,mzxid\|-><<(\d+),(\d+)>>", message)):
             # ACK
             res.mtype = "AK"
+            res.mzxid = (int(matched.group(1)) << 32) | int(matched.group(2))
+        elif (matched := re.match(r"mtype\|->CT,mzxid\|-><<(\d+),(\d+)>>", message)):
+            # COMMIT
+            res.mtype = "CT"
+            res.mzxid = (int(matched.group(1)) << 32) | int(matched.group(2))
+        elif (matched := re.match(r"mtype\|->DF,mzxid\|-><<(\d+),(\d+)>>", message)):
+            # DIFF
+            res.mtype = "DF"
+            res.mzxid = (int(matched.group(1)) << 32) | int(matched.group(2))
+        elif (matched := re.match(r"mtype\|->TC,mtruncZxid\|-><<(\d+),(\d+)>>", message)):
+            # TRUNC
+            res.mtype = "TC"
             res.mzxid = (int(matched.group(1)) << 32) | int(matched.group(2))
         else:
             raise ValueError(f"Unknown message type: {message}")
