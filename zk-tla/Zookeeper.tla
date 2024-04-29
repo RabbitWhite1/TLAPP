@@ -1033,9 +1033,8 @@ SerializeSnapshot(i, idx) == IF idx <= 0 THEN << >>
    for details. For proposals in committedLog and toBeApplied, send <PROPOSAL,
    COMMIT>. For proposals in outstandingProposals, send PROPOSAL only. *)
 SendSyncMsgs(i, j, lastSeenZxid, lastSeenIndex, mode, needRemoveHead) ==
-        /\ LET lastCommittedIndex == IF zabState[i] = BROADCAST 
-                                     THEN lastCommitted[i].index
-                                     ELSE Len(history[i])
+         \* change the spec here to slign with the Zookeeper implementation 
+        /\ LET lastCommittedIndex == lastCommitted[i].index
                lastProposedIndex  == Len(history[i])
                queue_origin == IF lastSeenIndex >= lastProposedIndex 
                                THEN << >>
@@ -1074,8 +1073,8 @@ SyncFollower(i, j, peerLastZxid, needRemoveHead) ==
         LET \* IsPeerNewEpochZxid == peerLastZxid[2] = 0
             lastProcessedZxid == lastProcessed[i].zxid
             minCommittedIdx   == lastSnapshot[i].index + 1
-            maxCommittedIdx   == IF zabState[i] = BROADCAST THEN lastCommitted[i].index
-                                 ELSE Len(history[i])
+            \* align with the Zookeeper implementation
+            maxCommittedIdx   == lastCommitted[i].index
             committedLogEmpty == minCommittedIdx > maxCommittedIdx
             minCommittedLog   == IF committedLogEmpty THEN lastProcessedZxid
                                  ELSE history[i][minCommittedIdx].zxid
@@ -1423,14 +1422,14 @@ LastCommitted(i) == IF zabState[i] = BROADCAST THEN lastCommitted[i]
                                             THEN [ index |-> 0,
                                                    zxid  |-> <<0, 0>> ]
                                             ELSE [ index |-> lastIndex ,
-                                                   zxid  |-> history[lastIndex].zxid ]
+                                                   zxid  |-> history[i][lastIndex].zxid ]
                                        ELSE IF lastInitialIndex < lastCommitted[i].index
                                             THEN lastCommitted[i]
                                             ELSE IF lastInitialIndex = 0
                                                  THEN [ index |-> 0,
                                                         zxid  |-> <<0, 0>> ]
                                                  ELSE [ index |-> lastInitialIndex,
-                                                        zxid  |-> history[lastInitialIndex].zxid ]
+                                                        zxid  |-> history[i][lastInitialIndex].zxid ]
                                ELSE                \* return tail of packetsCommitted
                                     LET committedIndex == ZxidToIndex(completeHis, 
                                                      packetsCommitted[lenCommitted] )
@@ -2017,7 +2016,7 @@ Next ==
 
 Spec == Init /\ [][Next]_vars
 
-STEP_LIMIT == step <= 18
+STEP_LIMIT == step <= 19
 ONLINE_MSGS == \A i, j \in Server: 
                   \/ /\ msgs[i][j] /= << >>
                      /\ electionMsgs[i][j] = << >>
